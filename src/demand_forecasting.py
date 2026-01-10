@@ -1,4 +1,5 @@
 # src/demand_forecasting.py
+
 class DemandForecaster:
     def __init__(self, charging_df):
         self.df = charging_df
