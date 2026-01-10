@@ -8,15 +8,20 @@ from src.demand_forecasting import DemandForecaster
 from src.spatial_analysis import SpatialAnalyzer
 from src.decision_engine import DecisionEngine
 
-# ===============================
+
 # Load Data
-# ===============================
 spatial_df = load_csv("data/processed/ev_spatial_preprocessed.csv.gz", compression="gzip")
 charging_df = load_csv("data/processed/cleaned_charging_patterns.csv")
 
-# ===============================
+# FIX: Ensure real kWh values for dashboard
+if charging_df["energy_consumed_(kwh)"].max() <= 1.0:
+    charging_df["energy_consumed_(kwh)"] = (
+        charging_df["energy_consumed_(kwh)"]
+        * charging_df["Energy Consumed (kWh)"].max()
+    )
+
+
 # Pre-compute Intelligence
-# ===============================
 spatial_analyzer = SpatialAnalyzer(spatial_df)
 city_ev_df = spatial_analyzer.ev_count_by_city()
 
@@ -26,9 +31,7 @@ peak_hour_df = forecaster.peak_charging_hour()
 
 decision_engine = DecisionEngine(demand_df, city_ev_df)
 
-# ===============================
 # Plot Functions (Styled)
-# ===============================
 sns.set_style("darkgrid")
 sns.set_palette("viridis")
 
@@ -58,9 +61,7 @@ def plot_peak_demand():
     plt.close()
     return "peak_demand.png"
 
-# ===============================
 # Insight Generator
-# ===============================
 def generate_insights():
     infra = decision_engine.infrastructure_recommendation()
     policy = decision_engine.policy_recommendation()
@@ -68,20 +69,22 @@ def generate_insights():
 
     # Metrics
     total_ev = city_ev_df["ev_count"].sum()
-    peak_energy = peak_hour_df["avg_energy_kwh"].max()
+    peak_energy = round(peak_hour_df["avg_energy_kwh"].max(), 2)
     top_city = city_ev_df.iloc[0]["city"]
 
-    explanation = (
-        f"This dashboard summarizes EV adoption and charging behavior across cities.\n\n"
-        f"Key Intelligence:\n"
-        f"- Cities with highest EV concentration may face charging congestion.\n"
-        f"- Peak charging hours indicate grid stress periods.\n"
-        f"- Total EVs monitored: {total_ev}\n"
-        f"- Top EV city: {top_city} with {city_ev_df.iloc[0]['ev_count']} EVs\n\n"
-        f"Purpose:\n"
-        "Support infrastructure planning and policy decision-making."
-    )
+    explanation = f"""
+    ### 📊 System Summary
+    This dashboard analyzes **EV adoption and charging behavior** across cities.
 
+    ### 🔍 Key Intelligence
+    - High EV concentration cities may face **charging congestion**
+    - Peak charging hours indicate **grid stress periods**
+    - **Total EVs monitored:** {total_ev}
+    - **Top EV city:** {top_city} ({city_ev_df.iloc[0]['ev_count']} EVs)
+
+    ### 🎯 Purpose
+    Support **data-driven infrastructure planning and policy decision-making**
+    """
     # Generate plots
     top_cities_plot = plot_top_cities()
     peak_demand_plot = plot_peak_demand()
@@ -98,9 +101,8 @@ def generate_insights():
         explanation
     )
 
-# ===============================
+
 # Gradio Dashboard Layout
-# ===============================
 with gr.Blocks(title="EV Adoption & Charging Dashboard") as dashboard:
     gr.Markdown("## ⚡ EV Adoption & Charging Demand Intelligence", elem_id="dashboard-title")
 
@@ -121,9 +123,10 @@ with gr.Blocks(title="EV Adoption & Charging Dashboard") as dashboard:
     # Insights / Tables
     with gr.Row():
         high_risk_df = gr.Dataframe(value=pd.DataFrame(), label="High-Risk Cities (EV Concentration)")
-        infra_box = gr.Textbox(value="", label="Infrastructure Recommendation")
-        policy_box = gr.Textbox(value="", label="Policy Recommendation")
-        explanation_box = gr.Textbox(value="", label="Decision Explanation")
+        infra_box = gr.Markdown(label="🏗 Infrastructure Recommendation")
+        policy_box = gr.Markdown(label="📜 Policy Recommendation")
+        explanation_box = gr.Markdown(label="🧠 Decision Explanation")
+
 
     # Connect Button
     btn.click(
